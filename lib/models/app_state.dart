@@ -22,23 +22,19 @@ class AppState extends ChangeNotifier {
 
   String get todayKey => DateTime.now().toIso8601String().split('T')[0];
 
-  // ── Points ──────────────────────────────────────────────
+  int get totalActive => students.where((s) => s.active).length;
+  int get presentToday => sessions.where((s) => s.date == todayKey && s.status == 'present').length;
+  int get absentToday => sessions.where((s) => s.date == todayKey && (s.status == 'absent' || s.status == 'absent_excused')).length;
+
   int getPoints(String id) => students.firstWhere((s) => s.id == id, orElse: () => Student(id: id, name: '', joinDate: '')).totalPoints;
   int getStars(int pts) => pts > 0 ? pts ~/ 10 : 0;
   int getTodayPoints(String studentId) => transactions.where((t) => t.studentId == studentId && t.createdDate.startsWith(todayKey)).fold(0, (s, t) => s + t.pointsChange);
 
-  // ── Today session ────────────────────────────────────────
   Session? getTodaySession(String studentId) {
     try { return sessions.firstWhere((s) => s.studentId == studentId && s.date == todayKey); }
     catch (_) { return null; }
   }
 
-  // ── Stats ────────────────────────────────────────────────
-  int get totalActive => students.where((s) => s.active).length;
-  int get presentToday => sessions.where((s) => s.date == todayKey && s.status == 'present').length;
-  int get absentToday => sessions.where((s) => s.date == todayKey && (s.status == 'absent' || s.status == 'absent_excused')).length;
-
-  // ── Add Student ───────────────────────────────────────────
   Future<void> addStudent(String name, String phone) async {
     final s = Student(id: DateTime.now().millisecondsSinceEpoch.toString(), name: name, phone: phone, joinDate: DateTime.now().toIso8601String());
     await DBHelper.insertStudent(s);
@@ -60,7 +56,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Session ───────────────────────────────────────────────
   Future<Session> getOrCreateSession(String studentId) async {
     final existing = getTodaySession(studentId);
     if (existing != null) return existing;
@@ -88,7 +83,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Points Tx ─────────────────────────────────────────────
   Future<void> addTx(String studentId, int delta, String type, String note) async {
     final student = students.firstWhere((s) => s.id == studentId);
     final t = PointTx(id: DateTime.now().millisecondsSinceEpoch.toString(), studentId: studentId, studentName: student.name, pointsChange: delta, type: type, note: note, createdDate: DateTime.now().toIso8601String());
@@ -102,24 +96,26 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Settings ─────────────────────────────────────────────
   Future<void> saveSettings(String halakaName, String teacherName) async {
     settings.halakaName = halakaName; settings.teacherName = teacherName;
     await DBHelper.upsertSettings(settings); notifyListeners();
   }
 
-  // ── Reports helpers ──────────────────────────────────────
-  List<Session> getSessionsInPeriod(String from, String to) =>
-      sessions.where((s) => s.date >= from && s.date <= to).toList();
+  // ── FIX: مقارنة التواريخ كـ String بشكل صحيح ──────────────────
+  List<Session> getSessionsInPeriod(String from, String to) {
+    return sessions.where((s) {
+      return s.date.compareTo(from) >= 0 && s.date.compareTo(to) <= 0;
+    }).toList();
+  }
 
   Map<String, dynamic> getStudentStats(String studentId, List<Session> periodSessions) {
     final ss = periodSessions.where((s) => s.studentId == studentId).toList();
     final present = ss.where((s) => s.status == 'present').length;
-    final absent = ss.where((s) => s.status == 'absent').length;
+    final absent  = ss.where((s) => s.status == 'absent').length;
     final excused = ss.where((s) => s.status == 'absent_excused').length;
-    final total = present + absent + excused;
-    final rate = total > 0 ? ((present / total) * 100).round() : 0;
-    final hifzPages = ss.where((s) => s.hifzCompleted && s.hifzAmount > 0).fold(0.0, (sum, s) => sum + s.hifzAmount);
+    final total   = present + absent + excused;
+    final rate    = total > 0 ? ((present / total) * 100).round() : 0;
+    final hifzPages   = ss.where((s) => s.hifzCompleted && s.hifzAmount > 0).fold(0.0, (sum, s) => sum + s.hifzAmount);
     final reviewPages = ss.where((s) => s.reviewCompleted && s.reviewAmount > 0).fold(0.0, (sum, s) => sum + s.reviewAmount);
     final hifzList = ss.where((s) => s.hifzCompleted && (s.hifzAmount > 0 || s.hifzNote.isNotEmpty)).map((s) {
       var line = ''; if (s.hifzAmount > 0) line += '${s.hifzAmount} صفحة'; if (s.hifzNote.isNotEmpty) line += '. ${s.hifzNote}'; return line;
@@ -130,7 +126,6 @@ class AppState extends ChangeNotifier {
     return {'present': present, 'absent': absent, 'excused': excused, 'total': total, 'rate': rate, 'hifzPages': hifzPages, 'reviewPages': reviewPages, 'hifzList': hifzList, 'reviewList': reviewList};
   }
 
-  // ── Backup ────────────────────────────────────────────────
   String exportJson() => jsonEncode({
     'app': 'halaqati', 'version': 2, 'exported_at': DateTime.now().toIso8601String(),
     'students': students.map((s) => s.toJson()).toList(),
