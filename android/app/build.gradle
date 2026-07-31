@@ -1,0 +1,20 @@
+android {
+    namespace "com.halaqati.app"
+    compileSdkVersion 35
+    ndkVersion "25.1.8937393"
+    defaultConfig {
+        applicationId "com.halaqati.app"
+        minSdkVersion 21
+        targetSdkVersion 35
+        versionCode 1
+        versionName "2.0.0"
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.debug; minifyEnabled false; shrinkResources false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+flutter { source '../..' }

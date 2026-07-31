@@ -1,0 +1,20 @@
+workflows:
+  android-workflow:
+    name: Android Build
+    max_build_duration: 60
+    environment:
+      flutter: stable
+    scripts:
+      - name: Build APK
+        script: |
+          flutter create --org com.halaqati --project-name halaqati tmp_project
+          cp -r lib tmp_project/
+          cp pubspec.yaml tmp_project/
+          mkdir -p tmp_project/assets/fonts
+          touch tmp_project/assets/fonts/.gitkeep
+          cd tmp_project
+          flutter pub get
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk ../app-release.apk
+    artifacts:
+      - app-release.apk
